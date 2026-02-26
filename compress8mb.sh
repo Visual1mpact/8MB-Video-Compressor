@@ -1,52 +1,148 @@
 #!/bin/bash
-# 8MB Video Compressor for Termux
-# Usage: ./compress8mb.sh input.mp4 output.mp4
 
+# ----------------------------------------------------------
+# 8MB Guaranteed Video Compressor (Fast, Clean, 2-Pass)
+# Uses libx264 with adaptive bitrate retry
+# Shows real-time progress bar
+# Utilizes all available CPU cores
+# ----------------------------------------------------------
+
+# Input / Output arguments
 INPUT="$1"
 OUTPUT="$2"
 
-if [ -z "$INPUT" ] || [ -z "$OUTPUT" ]; then
+# Validate arguments
+if [ ! -f "$INPUT" ] || [ -z "$OUTPUT" ]; then
     echo "Usage: $0 input.mp4 output.mp4"
     exit 1
 fi
 
-# Target size in MB
-TARGET_MB=8
-TARGET_BITS=$((TARGET_MB * 8192)) # MB -> kilobits
+# Target configuration
+TARGET_MB=8                 # Desired maximum output size
+AUDIO_BITRATE=64            # Fixed audio bitrate (kbps)
+THREADS=$(nproc)            # Use all available CPU cores
 
-# Get video duration in seconds
-DURATION=$(ffprobe -v error -select_streams v:0 -show_entries format=duration \
+# Temporary output file for encoding attempts
+TMP="${OUTPUT%.*}_tmp.mp4"
+
+# ----------------------------------------------------------
+# Extract Media Metadata
+# ----------------------------------------------------------
+
+# Get total duration in seconds (strip decimals for integer math)
+DURATION=$(ffprobe -v error -show_entries format=duration \
           -of default=noprint_wrappers=1:nokey=1 "$INPUT")
-DURATION=${DURATION%.*} # integer seconds
+DURATION=${DURATION%.*}
 
-# Get resolution
-WIDTH=$(ffprobe -v error -select_streams v:0 -show_entries stream=width \
-        -of csv=p=0 "$INPUT")
-HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height \
-         -of csv=p=0 "$INPUT")
+# Calculate total available bitrate budget (in kilobits)
+TARGET_BITS=$((TARGET_MB * 8192))
 
-# Calculate total target bitrate in kbps
-TOTAL_BITRATE=$((TARGET_BITS / DURATION))
+# Allocate video bitrate after reserving audio bitrate
+VIDEO_BITRATE=$(( (TARGET_BITS / DURATION) - AUDIO_BITRATE ))
 
-# Allocate audio bitrate (kbps)
-AUDIO_BITRATE=64
-VIDEO_BITRATE=$((TOTAL_BITRATE - AUDIO_BITRATE))
+# Detect resolution width to decide if downscaling is needed
+WIDTH=$(ffprobe -v error -select_streams v:0 \
+        -show_entries stream=width -of csv=p=0 "$INPUT")
 
-# Optional: downscale if width > 1280 (720p) to save bitrate
+# Downscale to 720p if input width exceeds 1280px
 if [ "$WIDTH" -gt 1280 ]; then
     SCALE="-vf scale=-2:720"
 else
     SCALE=""
 fi
 
-echo "Input: $INPUT"
-echo "Duration: $DURATION seconds"
-echo "Resolution: ${WIDTH}x${HEIGHT}"
-echo "Video bitrate: ${VIDEO_BITRATE}k"
-echo "Audio bitrate: ${AUDIO_BITRATE}k"
+# ----------------------------------------------------------
+# Initialization Display
+# ----------------------------------------------------------
 
-# Single-pass encoding for Termux (fast)
-ffmpeg -i "$INPUT" $SCALE -c:v libx264 -b:v "${VIDEO_BITRATE}k" -preset fast \
-       -c:a aac -b:a "${AUDIO_BITRATE}k" -movflags +faststart "$OUTPUT"
+echo "══════════════════════════════════════"
+echo " Duration: ${DURATION}s"
+echo " Target: ${TARGET_MB}MB"
+echo " Video Bitrate: ${VIDEO_BITRATE}k"
+echo " Audio Bitrate: ${AUDIO_BITRATE}k"
+echo " Threads: ${THREADS}"
+[ -n "$SCALE" ] && echo " Scaling: 720p"
+echo " Codec: libx264 (2-pass)"
+echo "══════════════════════════════════════"
 
-echo "Compression complete! Output: $OUTPUT (~${TARGET_MB}MB)"
+# ----------------------------------------------------------
+# Real-Time Progress Bar
+# Parses ffmpeg -progress output
+# ----------------------------------------------------------
+
+progress_bar() {
+    while read -r line; do
+        if [[ $line == out_time_ms=* ]]; then
+            ms=${line#*=}
+            seconds=$((ms / 1000000))
+
+            # Calculate percentage completion
+            percent=$((seconds * 100 / DURATION))
+            [ "$percent" -gt 100 ] && percent=100
+
+            # Build 50-character progress bar
+            filled=$((percent / 2))
+            empty=$((50 - filled))
+
+            printf "\rProgress: ["
+            printf "%0.s#" $(seq 1 $filled)
+            printf "%0.s " $(seq 1 $empty)
+            printf "] %3d%% (%ds/%ds)" \
+                   "$percent" "$seconds" "$DURATION"
+        fi
+    done
+}
+
+# ----------------------------------------------------------
+# Two-Pass Encoding Function
+# ----------------------------------------------------------
+
+encode() {
+
+    # Pass 1:
+    # Analyze video complexity (no audio, no output file)
+    ffmpeg -y -hide_banner -loglevel error -nostats \
+        -i "$INPUT" $SCALE \
+        -c:v libx264 -b:v "${VIDEO_BITRATE}k" \
+        -preset fast -threads "$THREADS" \
+        -pass 1 -an -f mp4 /dev/null
+
+    # Pass 2:
+    # Actual encoding using collected statistics
+    # Progress data piped into custom progress bar
+    ffmpeg -y -hide_banner -loglevel error -nostats \
+        -progress pipe:1 \
+        -i "$INPUT" $SCALE \
+        -c:v libx264 -b:v "${VIDEO_BITRATE}k" \
+        -preset fast -threads "$THREADS" \
+        -pass 2 \
+        -c:a aac -b:a "${AUDIO_BITRATE}k" \
+        -movflags +faststart \
+        "$TMP" 2>&1 | progress_bar
+
+    echo ""
+}
+
+# ----------------------------------------------------------
+# Size Enforcement Loop
+# If output exceeds 8MB, reduce bitrate by 5% and retry
+# ----------------------------------------------------------
+
+while true; do
+    encode
+
+    SIZE=$(du -m "$TMP" | cut -f1)
+
+    if [ "$SIZE" -le "$TARGET_MB" ]; then
+        mv "$TMP" "$OUTPUT"
+        break
+    else
+        # Reduce video bitrate by 5% and retry
+        VIDEO_BITRATE=$((VIDEO_BITRATE * 95 / 100))
+    fi
+done
+
+# Cleanup 2-pass log files
+rm -f ffmpeg2pass-0.log*
+
+echo "Done: $OUTPUT (~${SIZE}MB)"
