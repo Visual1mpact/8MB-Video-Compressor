@@ -43,6 +43,7 @@ VIDEO_BITRATE=$(( (TARGET_BITS / DURATION) - AUDIO_BITRATE ))
 # Detect resolution width to decide if downscaling is needed
 WIDTH=$(ffprobe -v error -select_streams v:0 \
         -show_entries stream=width -of csv=p=0 "$INPUT")
+WIDTH=${WIDTH//[^0-9]/}  # Keep only digits
 
 # Downscale to 720p if input width exceeds 1280px
 if [ "$WIDTH" -gt 1280 ]; then
