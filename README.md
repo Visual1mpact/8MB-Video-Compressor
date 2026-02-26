@@ -1,5 +1,3 @@
----
-
 # 🎬 8MB Video Compressor (Termux)
 
 A smart Bash script that compresses videos to **≤8MB guaranteed** using `ffmpeg`, designed for **Termux** and lightweight environments.
