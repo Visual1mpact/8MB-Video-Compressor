@@ -1,10 +1,11 @@
 # 🎬 8MB Video Compressor (Termux)
 
-A smart Bash script that compresses videos to **≤8MB guaranteed** using `ffmpeg`, designed for **Termux** and lightweight environments.
+A smart Bash script that compresses videos to **≤8MB by default** using `ffmpeg`, designed for **Termux** and lightweight environments.  
+
+> 💬 **Discord Note:** Discord currently allows **10MB uploads** for free users. This script defaults to **8MB** to ensure guaranteed compatibility. You can change the target to 10MB if desired (see “Customization” below).
 
 Perfect for:
-
-* Discord uploads (8MB free limit)
+* Discord uploads (10MB free limit — 8MB used by default for safety)
 * Quick file sharing
 * Mobile encoding via Termux
 * Low-resource Linux systems
@@ -13,7 +14,7 @@ Perfect for:
 
 ## 📦 Features
 
-* 🎯 **Guaranteed ≤8MB output**
+* 🎯 **Guaranteed ≤8MB output by default**
 * 🔁 2-pass encoding for accurate size targeting
 * 📊 Real-time progress bar
 * 🧠 Automatic bitrate calculation
@@ -62,7 +63,7 @@ Example:
 ## ⚙️ How It Works
 
 1. Reads video duration using `ffprobe`
-2. Converts target size (8MB) into total available kilobits
+2. Converts target size (8MB default) into total available kilobits
 3. Reserves **64 kbps** for audio
 4. Assigns remaining bitrate to video
 5. Downscales to **720p** if width > 1280px
@@ -70,7 +71,7 @@ Example:
 
    * Pass 1: analysis
    * Pass 2: final encode with progress tracking
-7. If file exceeds 8MB:
+7. If file exceeds target:
 
    * Reduces video bitrate by 5%
    * Re-encodes automatically
@@ -80,7 +81,7 @@ Example:
 
 ## 🧮 Bitrate Formula
 
-```
+```bash
 Target size (MB) × 8192 = total kilobits
 Total kilobits ÷ duration (seconds) = total bitrate (kbps)
 Video bitrate = total bitrate − audio bitrate
@@ -90,19 +91,17 @@ Video bitrate = total bitrate − audio bitrate
 
 ## 📊 Example Output
 
-```
+```text
 ══════════════════════════════════════
- Duration: 120s
- Target: 8MB
- Video Bitrate: 482k
- Audio Bitrate: 64k
- Threads: 24
- Scaling: 720p
- Codec: libx264 (2-pass)
+Duration: 120s
+Target: 8MB
+Video Bitrate: 482k
+Audio Bitrate: 64k
+Threads: 24
+Scaling: 720p
+Codec: libx264 (2-pass)
 ══════════════════════════════════════
-
 Progress: [##########################          ] 54% (65s/120s)
-
 Done: compressed.mp4 (~8MB)
 ```
 
@@ -110,7 +109,7 @@ Done: compressed.mp4 (~8MB)
 
 ## ⚠️ Notes
 
-* Output size will **never exceed 8MB**
+* Output size will **never exceed target (default 8MB)**
 * Very long videos will have lower quality (bitrate constrained)
 * Very short videos may look very high quality
 * Uses all logical CPU cores detected via `nproc`
@@ -123,7 +122,11 @@ Done: compressed.mp4 (~8MB)
 Change target size:
 
 ```bash
+# Default (safe for Discord)
 TARGET_MB=8
+
+# Use full Discord free limit
+TARGET_MB=10
 ```
 
 Change audio bitrate:
@@ -147,7 +150,7 @@ Change preset:
 * Improves bitrate distribution
 * Ensures accurate file size
 * Produces better quality at low bitrates
-* Guarantees ≤8MB output
+* Guarantees ≤TARGET_MB output
 
 This version prioritizes **accuracy and reliability** while remaining lightweight.
 
