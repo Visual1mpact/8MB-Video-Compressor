@@ -33,7 +33,6 @@ if [ ! -f "$INPUT" ] || [ -z "$OUTPUT" ]; then
 fi
 
 # Target configuration
-TARGET_MB=8                 # Desired maximum output size
 AUDIO_BITRATE=64            # Fixed audio bitrate (kbps)
 THREADS=$(nproc)            # Use all available CPU cores
 
