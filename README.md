@@ -151,7 +151,7 @@ AUDIO_BITRATE=64
 * Improves bitrate distribution
 * Ensures accurate file size
 * Produces better quality at low bitrates
-* Guarantees ≤TARGET_MB output
+* Guarantees ≤ TARGET_MB output
 
 This version prioritizes **accuracy and reliability** while remaining lightweight.
 
