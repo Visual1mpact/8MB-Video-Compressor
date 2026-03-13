@@ -7,6 +7,21 @@
 # Utilizes all available CPU cores
 # ----------------------------------------------------------
 
+# Default target size
+DEFAULT_TARGET_MB=8
+
+# Ask user for input
+read -p "Enter target size in MB (default $DEFAULT_TARGET_MB MB): " INPUT_MB
+
+# Use default if input is empty
+if [[ -z "$INPUT_MB" ]]; then
+    TARGET_MB=$DEFAULT_TARGET_MB
+else
+    TARGET_MB=$INPUT_MB
+fi
+
+echo "Target output size set to ${TARGET_MB}MB"
+
 # Input / Output arguments
 INPUT="$1"
 OUTPUT="$2"
